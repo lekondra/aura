@@ -470,6 +470,12 @@ let lastDel=null;
 
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const f=A[t.dataset.a];if(f)f(t.dataset,t,e)});
 document.addEventListener('submit',e=>{if(e.target.matches('[data-form]')){e.preventDefault();if(formCb)formCb(new FormData(e.target))}});
+/* обновляем данные из меню, когда пользователь возвращается на страницу или меню что-то записало */
+const refreshMenu=()=>{if(!document.getElementById('modal').innerHTML)render()};
+window.addEventListener('pageshow',refreshMenu);
+window.addEventListener('focus',refreshMenu);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshMenu()});
+window.addEventListener('storage',e=>{if(e.key==='aura_menu_plan')refreshMenu()});
 render();
 if(!S.profile.done)onboarding();
 </script>
