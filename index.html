@@ -128,7 +128,7 @@ svg.line{width:100%;height:auto;display:block;margin-top:10px}
 <script>
 /* ---------- данные ---------- */
 const KEY='aura.v2';
-const DEF={profile:{},weights:[],meals:[],workouts:[],water:{},moods:{},tasks:[]};
+const DEF={profile:{},weights:[],meals:[],nutrition:{},workouts:[],water:{},moods:{},tasks:[]};
 let S=load();
 function load(){try{const r=JSON.parse(localStorage.getItem(KEY)||'{}');return Object.assign(JSON.parse(JSON.stringify(DEF)),r)}catch(e){return JSON.parse(JSON.stringify(DEF))}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
@@ -160,10 +160,12 @@ let tab='home', sel=today(), taskFilter='day';
 const mealsOf=d=>S.meals.filter(m=>m.date===d);
 const actsOf=d=>S.workouts.filter(w=>w.date===d);
 const waterOf=d=>S.water[d]||0;
-function totals(d){return mealsOf(d).reduce((a,m)=>({kcal:a.kcal+m.kcal,p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{kcal:0,p:0,c:0,f:0})}
+function totals(d){const n=S.nutrition[d]||{};
+  return mealsOf(d).reduce((a,m)=>({kcal:a.kcal+m.kcal,p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{kcal:n.kcal||0,p:n.p||0,c:n.c||0,f:n.f||0})}
+const foodLogged=d=>totals(d).kcal>0;
 function score(d){
   const g=num(S.profile.water);
-  const items=[mealsOf(d).length>0, g?waterOf(d)>=g:waterOf(d)>0, actsOf(d).length>0, !!S.moods[d]];
+  const items=[foodLogged(d), g?waterOf(d)>=g:waterOf(d)>0, actsOf(d).length>0, !!S.moods[d]];
   return Math.round(items.filter(Boolean).length/items.length*100);
 }
 function weekDays(){const ws=weekStart(sel);return[...Array(7)].map((_,i)=>addDays(ws,i))}
@@ -238,9 +240,9 @@ function vHome(){
     ${bars(sc,WD,{max:100,on:si,unit:'%',avgLabel:'Ср.'})}
   </div>
   <div class="grid2">
-    <button class="tile pink" data-a="tab" data-t="food"><span class="lbl">Калории</span>
+    <button class="tile pink" data-a="add-day"><span class="lbl">Калории</span>
       <div><div class="big">${fmt(t.kcal)} <small>${kg?`/ ${fmt(kg)}`:'ккал'}</small></div>
-      ${kg?`<div class="prog"><i style="width:${t.kcal/kg*100}%"></i></div>`:`<div class="sub">${mealsOf(sel).length?'':'Добавьте приём пищи'}</div>`}</div></button>
+      ${kg?`<div class="prog"><i style="width:${t.kcal/kg*100}%"></i></div>`:`<div class="sub">${t.kcal?'':'Нажмите, чтобы внести итог за день'}</div>`}</div></button>
     <div class="tile sky"><span class="lbl">Вода</span>
       <div><div class="big">${fmt(w)} <small>${wg?`/ ${fmt(wg)} мл`:'мл'}</small></div>
       ${wg?`<div class="prog"><i style="width:${w/wg*100}%"></i></div>`:''}
@@ -277,9 +279,9 @@ function vFood(){
   <div class="card"><div class="row"><div><h3>Вода</h3><div class="sm mute">${fmt(w)} мл${wg?` из ${fmt(wg)}`:''}</div></div>
     <div style="display:flex;gap:8px"><button class="btn ghost sm" data-a="water" data-v="-250">−250</button><button class="btn sm" data-a="water" data-v="250">+250</button></div></div>
     ${wg?`<div class="prog" style="background:var(--bg)"><i style="width:${w/wg*100}%;background:#6bb6d6"></i></div>`:''}</div>
-  ${MEALS.map(type=>{const ms=mealsOf(sel).filter(m=>m.type===type),sum=ms.reduce((a,m)=>a+m.kcal,0);
-    return `<div class="card"><div class="row"><div><h3>${type}</h3><div class="sm mute">${ms.length?fmt(sum)+' ккал':'Пока пусто'}</div></div><button class="plus" data-a="add-meal" data-type="${type}" aria-label="Добавить">+</button></div>
-    ${ms.length?`<div class="list" style="margin-top:6px">${ms.map(m=>`<div class="it"><div class="m"><b>${esc(m.name)}</b><span class="xs mute">Б ${fmt(m.p)} · Ж ${fmt(m.f)} · У ${fmt(m.c)}${m.g?` · ${fmt(m.g)} г`:''}</span></div><b style="font-weight:600">${fmt(m.kcal)}</b><button class="x" data-a="del" data-k="meals" data-id="${m.id}">×</button></div>`).join('')}</div>`:''}</div>`}).join('')}
+  <div class="card"><div class="row"><div><h3>Итог за день</h3><div class="sm mute">${t.kcal?`${fmt(t.kcal)} ккал · Б ${fmt(t.p)} · Ж ${fmt(t.f)} · У ${fmt(t.c)}`:'Пока не внесён'}</div></div>
+    <button class="btn sm" data-a="add-day">${t.kcal?'Изменить':'Внести'}</button></div></div>
+  ${mealsOf(sel).length?`<div class="card"><h3>Ранее добавленные приёмы пищи</h3><div class="list" style="margin-top:6px">${mealsOf(sel).map(m=>`<div class="it"><div class="m"><b>${esc(m.name)}</b><span class="xs mute">${esc(m.type)} · Б ${fmt(m.p)} · Ж ${fmt(m.f)} · У ${fmt(m.c)}</span></div><b style="font-weight:600">${fmt(m.kcal)}</b><button class="x" data-a="del" data-k="meals" data-id="${m.id}">×</button></div>`).join('')}</div></div>`:''}
   <h2>Калории за неделю</h2><div class="card" style="margin-top:0">${bars(wk,WD,{on:si,unit:''})}</div>`;
 }
 
@@ -415,16 +417,16 @@ const A={
  toggle(d){const t=S.tasks.find(x=>x.id===d.id);if(t){t.done=!t.done;save();render()}},
  del(d){const arr=S[d.k],i=arr.findIndex(x=>x.id===d.id);if(i<0)return;const it=arr.splice(i,1)[0];save();render();lastDel={k:d.k,it,i};toast('Удалено',true)},
  undo(){if(!lastDel)return;S[lastDel.k].splice(lastDel.i,0,lastDel.it);lastDel=null;save();render();document.getElementById('toast').innerHTML=''},
- 'add-meal'(d){
-   const names=[...new Set(S.meals.map(m=>m.name))].slice(-60);
-   openForm('Приём пищи',[
-     {k:'type',label:'Приём',type:'select',options:MEALS,value:d.type||MEALS[0]},
-     {k:'name',label:'Название блюда / продукта',req:true,list:'dl',ph:'Например, овсянка'},
-     [{k:'g',label:'Порция, г',type:'number'},{k:'kcal',label:'Калории',type:'number'}],
-     [{k:'p',label:'Белки, г',type:'number'},{k:'f',label:'Жиры, г',type:'number'}],
-     {k:'c',label:'Углеводы, г',type:'number'}],
-     fd=>{S.meals.push({id:uid(),date:sel,type:fd.get('type'),name:fd.get('name').trim(),g:num(fd.get('g')),kcal:num(fd.get('kcal')),p:num(fd.get('p')),f:num(fd.get('f')),c:num(fd.get('c'))});save();closeForm();render()},
-     {extra:`<datalist id="dl">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`});
+ 'add-day'(){
+   const n=S.nutrition[sel]||{};
+   openForm(`Питание · ${parse(sel).toLocaleDateString('ru-RU',{day:'numeric',month:'long'})}`,[
+     {k:'kcal',label:'Калории за день, ккал',type:'number',value:n.kcal||'',req:true},
+     [{k:'p',label:'Белки, г',type:'number',value:n.p||''},{k:'f',label:'Жиры, г',type:'number',value:n.f||''}],
+     {k:'c',label:'Углеводы, г',type:'number',value:n.c||''}],
+     fd=>{const kcal=num(fd.get('kcal'));
+       if(kcal>0)S.nutrition[sel]={kcal,p:num(fd.get('p')),f:num(fd.get('f')),c:num(fd.get('c'))};else delete S.nutrition[sel];
+       save();closeForm();render()},
+     {intro:'Введите итоги за весь день. Повторное сохранение заменяет прежние значения.'});
  },
  'add-act'(){
    openForm('Тренировка',[
@@ -454,13 +456,6 @@ let lastDel=null;
 
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const f=A[t.dataset.a];if(f)f(t.dataset,t,e)});
 document.addEventListener('submit',e=>{if(e.target.matches('[data-form]')){e.preventDefault();if(formCb)formCb(new FormData(e.target))}});
-document.addEventListener('input',e=>{ // подстановка КБЖУ из ранее введённых блюд
-  if(e.target.name==='name'&&e.target.getAttribute('list')==='dl'){
-    const m=[...S.meals].reverse().find(x=>x.name===e.target.value.trim());
-    if(m){const f=e.target.form;[['g','g'],['kcal','kcal'],['p','p'],['f','f'],['c','c']].forEach(([k,mk])=>{const i=f.elements[k];if(i&&!i.value&&m[mk])i.value=m[mk]})}
-  }
-});
-
 render();
 if(!S.profile.done)onboarding();
 </script>
