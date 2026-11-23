@@ -163,6 +163,9 @@ const waterOf=d=>S.water[d]||0;
 function totals(d){const n=S.nutrition[d]||{};
   return mealsOf(d).reduce((a,m)=>({kcal:a.kcal+m.kcal,p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{kcal:n.kcal||0,p:n.p||0,c:n.c||0,f:n.f||0})}
 const foodLogged=d=>totals(d).kcal>0;
+/* Связь с «Меню на неделю» (lekondra.github.io/mediterraneandiet): страница меню кладёт КБЖУ дней в общее хранилище браузера */
+function menuPlan(){try{const m=JSON.parse(localStorage.getItem('aura_menu_plan')||'null');return m&&m.days?m:null}catch(e){return null}}
+function kcalGoal(){const m=menuPlan();return num(S.profile.kcal)||(m&&m.targets&&num(m.targets.kcal))||0}
 function score(d){
   const g=num(S.profile.water);
   const items=[foodLogged(d), g?waterOf(d)>=g:waterOf(d)>0, actsOf(d).length>0, !!S.moods[d]];
@@ -225,7 +228,7 @@ function vHome(){
   const p=S.profile,h=new Date().getHours();
   const hello=h<5?'Доброй ночи':h<12?'Доброе утро':h<18?'Добрый день':'Добрый вечер';
   const days=weekDays(), sc=days.map(score), si=days.indexOf(sel);
-  const t=totals(sel), kg=num(p.kcal), wg=num(p.water), w=waterOf(sel);
+  const t=totals(sel), kg=kcalGoal(), wg=num(p.water), w=waterOf(sel);
   const acts=actsOf(sel), min=acts.reduce((a,x)=>a+x.min,0);
   const wkActs=S.workouts.filter(x=>days.includes(x.date)).length, goalAct=num(p.trainings);
   const mood=S.moods[sel], ws=sortedWeights(), last=ws[ws.length-1], first=ws[0];
@@ -267,7 +270,7 @@ function vHome(){
 }
 
 function vFood(){
-  const t=totals(sel), kg=num(S.profile.kcal), w=waterOf(sel), wg=num(S.profile.water);
+  const t=totals(sel), kg=kcalGoal(), w=waterOf(sel), wg=num(S.profile.water);
   const days=weekDays(), si=days.indexOf(sel), wk=days.map(d=>totals(d).kcal);
   const kc=t.p*4+t.c*4+t.f*9||1;
   return `<div class="head"><h1>Питание</h1></div>${strip()}
@@ -279,12 +282,22 @@ function vFood(){
   <div class="card"><div class="row"><div><h3>Вода</h3><div class="sm mute">${fmt(w)} мл${wg?` из ${fmt(wg)}`:''}</div></div>
     <div style="display:flex;gap:8px"><button class="btn ghost sm" data-a="water" data-v="-250">−250</button><button class="btn sm" data-a="water" data-v="250">+250</button></div></div>
     ${wg?`<div class="prog" style="background:var(--bg)"><i style="width:${w/wg*100}%;background:#6bb6d6"></i></div>`:''}</div>
+  ${menuCard()}
   <div class="card"><div class="row"><div><h3>Итог за день</h3><div class="sm mute">${t.kcal?`${fmt(t.kcal)} ккал · Б ${fmt(t.p)} · Ж ${fmt(t.f)} · У ${fmt(t.c)}`:'Пока не внесён'}</div></div>
     <button class="btn sm" data-a="add-day">${t.kcal?'Изменить':'Внести'}</button></div></div>
   ${mealsOf(sel).length?`<div class="card"><h3>Ранее добавленные приёмы пищи</h3><div class="list" style="margin-top:6px">${mealsOf(sel).map(m=>`<div class="it"><div class="m"><b>${esc(m.name)}</b><span class="xs mute">${esc(m.type)} · Б ${fmt(m.p)} · Ж ${fmt(m.f)} · У ${fmt(m.c)}</span></div><b style="font-weight:600">${fmt(m.kcal)}</b><button class="x" data-a="del" data-k="meals" data-id="${m.id}">×</button></div>`).join('')}</div></div>`:''}
   <h2>Калории за неделю</h2><div class="card" style="margin-top:0">${bars(wk,WD,{on:si,unit:''})}</div>`;
 }
 
+function menuCard(){
+  const m=menuPlan(), d=m&&m.days[sel], t=totals(sel);
+  const link='<a href="../mediterraneandiet/" style="color:var(--navy);font-weight:600">Меню на неделю →</a>';
+  if(!d)return `<div class="card"><h3>По меню</h3><p class="sm mute" style="margin-top:6px">${m?'На этот день в меню блюд нет.':'Меню пока не найдено. Откройте страницу меню на этом же устройстве и в этом же браузере — данные подтянутся сами.'}</p><p class="sm" style="margin-top:8px">${link}</p></div>`;
+  const same=t.kcal===d.kcal&&t.p===d.p&&t.f===d.f&&t.c===d.c;
+  return `<div class="card"><div class="row"><div><h3>По меню</h3><div class="sm mute">${fmt(d.kcal)} ккал · Б ${fmt(d.p)} · Ж ${fmt(d.f)} · У ${fmt(d.c)}</div></div>
+    ${same?'<span class="sm mute">✓ внесено</span>':'<button class="btn soft sm" data-a="use-menu">Внести в итог</button>'}</div>
+    <p class="xs mute" style="margin-top:8px">Это план, а не факт: после внесения итог можно поправить кнопкой «Изменить». ${link}</p></div>`;
+}
 function vAct(){
   const days=weekDays(), si=days.indexOf(sel), list=actsOf(sel);
   const wk=S.workouts.filter(x=>days.includes(x.date));
@@ -428,6 +441,7 @@ const A={
        save();closeForm();render()},
      {intro:'Введите итоги за весь день. Повторное сохранение заменяет прежние значения.'});
  },
+ 'use-menu'(){const m=menuPlan(),d=m&&m.days[sel];if(!d)return;S.nutrition[sel]={kcal:d.kcal,p:d.p,f:d.f,c:d.c};save();render();toast('Итог взят из меню')},
  'add-act'(){
    openForm('Тренировка',[
      {k:'type',label:'Вид',type:'select',options:ACTS},
